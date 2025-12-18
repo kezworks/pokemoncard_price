@@ -1,74 +1,45 @@
-import os
-import pandas as pd
-from datetime import datetime
-from playwright.sync_api import sync_playwright
-from bs4 import BeautifulSoup
+function scrapeKaunabel() {
+  // カーナベルの「151」買取ページURL（必要に応じて調整してください）
+  const url = "https://www.ka-nabell.com/?genre=7&category=235&rare=62"; 
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getActiveSheet();
+  
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["日付", "カード名", "買取価格"]);
+  }
 
-def scrape_with_browser():
-    url = "https://yuyu-tei.jp/buy/poc/s/sv02a"
-    today = datetime.now().strftime('%Y-%m-%d')
-    card_data = []
+  const response = UrlFetchApp.fetch(url, {
+    "headers": { "User-Agent": "Mozilla/5.0" },
+    "muteHttpExceptions": true
+  });
+  
+  const html = response.getContentText();
+  const today = Utilities.formatDate(new Date(), "JST", "yyyy-MM-dd");
 
-    with sync_playwright() as p:
-        # ステルス性を高めるための設定
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            viewport={'width': 1280, 'height': 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-        
-        # 自動操作であることを隠すためのJavaScript
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        print(f"アクセス中: {url}")
-        try:
-            # タイムアウトを長めに設定
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            # ページが完全に読み込まれるまで少し待つ
-            page.wait_for_timeout(5000)
-            
-            # デバッグ用：画面がどう見えているか保存する
-            page.screenshot(path="debug_screenshot.png")
-            print("デバッグ用のスクリーンショットを保存しました。")
-            
-            content = page.content()
-            soup = BeautifulSoup(content, 'html.parser')
-            
-            # クラス名が動的に変わっている可能性を考慮し、より広い範囲で検索
-            items = soup.find_all('div', class_='card_unit')
-            print(f"検出されたユニット数: {len(items)}")
+  // カーナベルの構造に合わせて抽出（商品リストの塊を取得）
+  // <li>タグや特定のclassで分割
+  const items = html.split('<div class="item_card">');
+  let count = 0;
 
-            for item in items:
-                name_elem = item.find('h4', class_='name')
-                if name_elem and "モンスターボール" in name_elem.get_text():
-                    full_text = name_elem.get_text(strip=True)
-                    display_name = full_text.split('(')[0].strip()
-                    price_tag = item.find('b', class_='price')
-                    price = price_tag.get_text(strip=True).replace('円', '').replace(',', '') if price_tag else "0"
-                    
-                    card_data.append({
-                        "date": today,
-                        "card_name": display_name,
-                        "price": int(price)
-                    })
-        except Exception as e:
-            print(f"エラー発生: {e}")
-        finally:
-            browser.close()
+  for (let i = 1; i < items.length; i++) {
+    const item = items[i];
+    
+    // カード名と価格を抽出
+    // カーナベルは名前が「p class="name"」、価格が「span class="price"」などの傾向があります
+    const nameMatch = item.match(/<p class="name">([\s\S]*?)<\/p>/i);
+    const priceMatch = item.match(/<span class="price">([\s\S]*?)<\/span>/i);
 
-    if not card_data:
-        print("データが取得できませんでした。")
-        return
+    if (nameMatch && priceMatch) {
+      let name = nameMatch[1].replace(/<[^>]*>/g, "").trim();
+      let price = priceMatch[1].replace(/[^0-9]/g, "");
 
-    # 保存処理（前回と同じ）
-    df = pd.DataFrame(card_data)
-    file_path = 'monster_ball_prices.csv'
-    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-        old_df = pd.read_csv(file_path)
-        df = pd.concat([old_df, df], ignore_index=True)
-    df.to_csv(file_path, index=False, encoding='utf-8')
-    print(f"成功！ {len(card_data)}件保存しました。")
-
-if __name__ == "__main__":
-    scrape_with_browser()
+      // モンスターボール柄を判別
+      if (name.includes("モンスターボール")) {
+        sheet.appendRow([today, name, parseInt(price)]);
+        count++;
+      }
+    }
+  }
+  
+  Logger.log(count + "件のデータをカーナベルから取得しました！");
+}
