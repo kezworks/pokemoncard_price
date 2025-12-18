@@ -2,8 +2,8 @@ name: Daily Yuyutei Scraper
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 毎日 UTC 0:00 (日本時間 9:00) に実行
-  workflow_dispatch:      # 手動実行ボタンも追加
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,9 +17,10 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: ライブラリのインストール
+      - name: 依存ライブラリとブラウザのインストール
         run: |
           pip install -r requirements.txt
+          playwright install --with-deps chromium
 
       - name: スクレイピング実行
         run: python main.py
@@ -29,5 +30,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Add daily price data: $(date +'%Y-%m-%d')" || exit 0
+          git commit -m "Add daily price data" || exit 0
           git push
