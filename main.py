@@ -44,7 +44,7 @@ def scrape_and_append():
         combined_df = new_df
 
     # 保存
-    combined_df.to_csv(file_path, index=False, encoding='utf-8-sig')
+    combined_df.to_csv(file_path, index=False, encoding='utf-8', sep=',')
     print(f"{today}分のデータを追記しました。合計: {len(combined_df)}行")
 
 if __name__ == "__main__":
