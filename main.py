@@ -6,48 +6,53 @@ import os
 
 def scrape_monster_ball_mirrors():
     url = "https://yuyu-tei.jp/buy/poc/s/sv02a"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"}
+    # ブラウザからのアクセスに見せかけるための魔法の言葉
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    }
     
     try:
         response = requests.get(url, headers=headers)
         response.encoding = response.apparent_encoding
         soup = BeautifulSoup(response.text, 'html.parser')
     except Exception as e:
-        print(f"Error fetching data: {e}")
+        print(f"通信エラー: {e}")
         return
 
     card_data = []
     today = datetime.now().strftime('%Y-%m-%d')
     
-    # 全てのカードが入っているボックスを取得
-    items = soup.select('div.card_unit')
+    # 遊々亭の現在のHTML構造に合わせてセレクタを変更
+    # 買取価格の各ユニットは 'div.card_unit' または特定の構造の中にある
+    items = soup.find_all('div', class_='card_unit')
+
+    if not items:
+        print("警告: 'card_unit' が一つも見つかりませんでした。")
+        # サイトの中身を少しだけ表示してデバッグ
+        print("取得したテキストの冒頭:", soup.text[:200].replace('\n', ' '))
+        return
 
     for item in items:
-        # カード名と詳細テキストをまとめて取得
-        name_elem = item.find('h4', class_='name')
-        if not name_elem:
-            continue
-            
-        full_text = name_elem.get_text(strip=True)
+        # とにかく全てのテキストを結合してチェック
+        full_text = item.get_text()
         
-        # 「モンスターボール」というキーワードが含まれているかチェック
-        if "モンスターボール" in full_text:
-            # 表示をスッキリさせる（ミラーの記述を消す）
-            display_name = full_text.split('(')[0].strip()
+        # 「ミラー」や「モンスターボール」が含まれているか判定
+        if "モンスターボール" in full_text or "ミラー" in full_text:
+            name_tag = item.find('h4')
+            name = name_tag.get_text(strip=True) if name_tag else "不明"
             
-            # 価格の取得
             price_tag = item.find('b', class_='price')
-            price_text = price_tag.get_text(strip=True).replace('円', '').replace(',', '') if price_tag else "0"
+            price = price_tag.get_text(strip=True).replace('円', '').replace(',', '') if price_tag else "0"
             
             card_data.append({
                 "date": today,
-                "card_name": display_name,
-                "price": int(price_text)
+                "card_name": name,
+                "price": int(price)
             })
 
     if not card_data:
-        # 見つからなかった場合、サイトの構造が変わった可能性があるのでHTMLを少し表示して確認
-        print("データが見つかりませんでした。サイトの構成を確認してください。")
+        print("カードは見つかりましたが、キーワードに一致するものがありませんでした。")
         return
 
     # 保存処理
@@ -61,7 +66,7 @@ def scrape_monster_ball_mirrors():
         combined_df = new_df
 
     combined_df.to_csv(file_path, index=False, encoding='utf-8')
-    print(f"{today}分: モンスターボールミラー {len(new_df)}件を保存しました！")
+    print(f"{today}分: {len(new_df)}件を保存しました！")
 
 if __name__ == "__main__":
     scrape_monster_ball_mirrors()
